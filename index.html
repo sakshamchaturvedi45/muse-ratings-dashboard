@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUSE Wearables — Ratings Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { outfit: ['Outfit', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --bg: #fdf5de;
+            --card: #1A1A1A;
+            --card-hover: #222222;
+            --border: #2A2A2A;
+            --gold: #D4A853;
+            --gold-light: #E8C777;
+            --gold-dim: rgba(212,168,83,0.12);
+            --text: #F0F0F0;
+            --muted: #7A7A7A;
+            --android: #3DDC84;
+            --tp-green: #00B67A;
+            --google-red: #EA4335;
+            --star5: #22C55E; --star4: #84CC16; --star3: #EAB308; --star2: #F97316; --star1: #EF4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .bg-atmosphere {
+            position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            background:
+                radial-gradient(ellipse 600px 400px at 15% 10%, rgba(212,168,83,0.04) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 500px at 85% 85%, rgba(61,220,132,0.025) 0%, transparent 70%),
+                radial-gradient(ellipse 400px 300px at 50% 50%, rgba(212,168,83,0.015) 0%, transparent 60%);
+        }
+
+        .bg-grid {
+            position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.02;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.12) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        .dash-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .dash-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(212,168,83,0.2);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        }
+
+        .card-accent-ios { border-left: 3px solid var(--gold); }
+        .card-accent-android { border-left: 3px solid var(--android); }
+        .card-accent-tp { border-left: 3px solid var(--tp-green); }
+        .card-accent-google { border-left: 3px solid var(--google-red); }
+
+        .star-bar-track {
+            background: rgba(255,255,255,0.06);
+            border-radius: 4px;
+            height: 10px;
+            overflow: hidden;
+        }
+        .star-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .gauge-track { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 12; stroke-linecap: round; }
+        .gauge-fill { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset 1.8s cubic-bezier(0.22, 1, 0.36, 1); }
+
+        @keyframes badgePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,182,122,0.3); }
+            50% { box-shadow: 0 0 0 8px rgba(0,182,122,0); }
+        }
+        .badge-pulse { animation: badgePulse 2.5s ease-in-out infinite; }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { opacity: 0; animation: fadeInUp 0.7s ease forwards; }
+        .delay-1 { animation-delay: 0.08s; }
+        .delay-2 { animation-delay: 0.16s; }
+        .delay-3 { animation-delay: 0.24s; }
+        .delay-4 { animation-delay: 0.32s; }
+        .delay-5 { animation-delay: 0.4s; }
+        .delay-6 { animation-delay: 0.5s; }
+        .delay-7 { animation-delay: 0.6s; }
+        .delay-8 { animation-delay: 0.7s; }
+
+        .muse-logo { height: 40px; filter: brightness(1.1); object-fit: contain; }
+
+        .country-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        .country-table th {
+            text-align: left; padding: 12px 16px; font-weight: 600; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+            border-bottom: 1px solid var(--border);
+        }
+        .country-table td {
+            padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.9rem;
+        }
+        .country-table tr:last-child td { border-bottom: none; }
+        .country-table tbody tr { transition: background 0.2s ease; }
+        .country-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+        .rating-dot {
+            display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px;
+        }
+
+        .estimated-tag {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 9px; color: var(--muted); background: rgba(255,255,255,0.05);
+            padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: 500;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .fade-in { animation: none; opacity: 1; }
+            .star-bar-fill { transition: none; }
+            .gauge-fill { transition: none; }
+            .badge-pulse { animation: none; }
+        }
+
+        @media (max-width: 640px) {
+            .muse-logo { height: 32px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-atmosphere"></div>
+    <div class="bg-grid"></div>
+
+    <div class="relative z-10 min-h-screen flex flex-col">
+
+        <!-- Header -->
+        <header class="fade-in border-b border-[#2A2A2A] bg-[#111111]/80 backdrop-blur-md sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <img
+                        src="https://z-cdn-media.chatglm.cn/files/f2bbcd56-58e2-4792-928b-eb5f40ba3116.jpg?auth_key=1876426111-2750683b67eb4cf2b015ddb4d110bb72-0-469d88d18b568b684796f59917dcf866"
+                        alt="MUSE Wearables"
+                        class="muse-logo rounded"
+                        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+                    >
+                    <span class="hidden items-center text-xl font-black tracking-[0.2em] text-white" style="display:none">MUSE</span>
+                    <div class="h-6 w-px bg-[#333] hidden sm:block"></div>
+                    <div>
+                        <h1 class="text-base sm:text-lg font-semibold tracking-wide text-[#F0F0F0]">Ratings Dashboard</h1>
+                        <p class="text-xs text-[#7A7A7A] tracking-wide">Customer Experience Overview</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="hidden sm:inline text-xs text-[#7A7A7A]">Data as of</span>
+                    <span class="text-xs font-medium bg-[#222] border border-[#333] text-[#D4A853] px-3 py-1.5 rounded-full">
+                        <i class="far fa-calendar-alt mr-1.5 opacity-60"></i>30 Mar 2026
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
+
+            <!-- SUMMARY CARDS -->
+            <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div class="dash-card card-accent-ios p-4 sm:p-5 fade-in delay-1">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="fab fa-apple text-[var(--gold)] text-sm"></i>
+                        <span class="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">iOS App</span>
+                    </div>
+                    <div class="flex items-end gap-2 mb-2">
+                        <span class="text-3xl sm:text-4xl font-extrabold text-white counter" data-target="4.5" data-decimals="1">0</span>
+                        <span class="text-sm text-[var(--muted)] mb-1">/ 5</span>
+                    </div>
+                    <div class="flex gap-0.5 text-xs text-[var(--gold)]">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star-half-stroke"></i>
+                    </div>
+                </div>
+                <div class="dash-card card-accent-android p-4 sm:p-5 fade-in delay-2">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="fab fa-android text-[var(--android)] text-sm"></i>
+                        <span class="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Android App</span>
+                    </div>
+                    <div class="flex items-end gap-2 mb-2">
+                        <span class="text-3xl sm:text-4xl font-extrabold text-white counter" data-target="4.1" data-decimals="1">0</span>
+                        <span class="text-sm text-[var(--muted)] mb-1">/ 5</span>
+                    </div>
+                    <div class="flex gap-0.5 text-xs text-[var(--android)]">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="far fa-star"></i>
+                    </div>
+                </div>
+                <div class="dash-card card-accent-tp p-4 sm:p-5 fade-in delay-3">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="fas fa-shield-halved text-[var(--tp-green)] text-sm"></i>
+                        <span class="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Trustpilot</span>
+                    </div>
+                    <div class="flex items-end gap-2 mb-2">
+                        <span class="text-3xl sm:text-4xl font-extrabold text-white counter" data-target="3.1" data-decimals="1">0</span>
+                        <span class="text-sm text-[var(--muted)] mb-1">/ 5</span>
+                    </div>
+                    <div class="flex gap-0.5 text-xs text-[var(--tp-green)]">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i>
+                    </div>
+                </div>
+                <div class="dash-card card-accent-google p-4 sm:p-5 fade-in delay-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="fab fa-google text-[var(--google-red)] text-sm"></i>
+                        <span class="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Google</span>
+                    </div>
+                    <div class="flex items-end gap-2 mb-2">
+                        <span class="text-3xl sm:text-4xl font-extrabold text-white counter" data-target="4.3" data-decimals="1">0</span>
+                        <span class="text-sm text-[var(--muted)] mb-1">/ 5</span>
+                    </div>
+                    <div class="flex gap-0.5 text-xs text-[var(--google-red)]">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="far fa-star"></i>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STAR BREAKDOWN -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div class="dash-card p-5 sm:p-6 fade-in delay-5">
+                    <div class="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 class="text-base font-semibold text-white">iOS Rating Breakdown</h2>
+                            <p class="text-xs text-[var(--muted)] mt-0.5">Star distribution across all regions</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-[var(--gold-dim)] px-3 py-1 rounded-full">
+                            <span class="text-sm font-bold text-[var(--gold)]">4.5</span>
+                            <i class="fas fa-star text-[var(--gold)] text-[10px]"></i>
+                        </div>
+                    </div>
+                    <div class="space-y-3" id="ios-bars">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">5 <i class="fas fa-star text-[var(--star5)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="70" style="background:var(--star5)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">70%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">4 <i class="fas fa-star text-[var(--star4)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="18" style="background:var(--star4)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">18%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">3 <i class="fas fa-star text-[var(--star3)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="6" style="background:var(--star3)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">6%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">2 <i class="fas fa-star text-[var(--star2)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="4" style="background:var(--star2)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">4%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">1 <i class="fas fa-star text-[var(--star1)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="2" style="background:var(--star1)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">2%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="dash-card p-5 sm:p-6 fade-in delay-6">
+                    <div class="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 class="text-base font-semibold text-white">Android Rating Breakdown</h2>
+                            <p class="text-xs text-[var(--muted)] mt-0.5">Star distribution across all regions</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-[rgba(61,220,132,0.12)] px-3 py-1 rounded-full">
+                            <span class="text-sm font-bold text-[var(--android)]">4.1</span>
+                            <i class="fas fa-star text-[var(--android)] text-[10px]"></i>
+                        </div>
+                    </div>
+                    <div class="space-y-3" id="android-bars">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">5 <i class="fas fa-star text-[var(--star5)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="60" style="background:var(--star5)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">60%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">4 <i class="fas fa-star text-[var(--star4)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="15" style="background:var(--star4)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">15%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">3 <i class="fas fa-star text-[var(--star3)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="8" style="background:var(--star3)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">8%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">2 <i class="fas fa-star text-[var(--star2)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="9" style="background:var(--star2)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">9%</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[var(--muted)] w-14 text-right flex-shrink-0">1 <i class="fas fa-star text-[var(--star1)] text-[9px]"></i></span>
+                            <div class="star-bar-track flex-1"><div class="star-bar-fill" data-width="8" style="background:var(--star1)"></div></div>
+                            <span class="text-xs font-medium text-[var(--text)] w-10 text-right">8%</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- COUNTRY-WISE SECTION -->
+            <section class="dash-card p-5 sm:p-6 fade-in delay-7">
+                <div class="mb-5">
+                    <h2 class="text-base font-semibold text-white">Country-wise Ratings</h2>
+                    <p class="text-xs text-[var(--muted)] mt-0.5">Platform ratings by geography — 30 March 2026</p>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                    <div class="xl:col-span-3">
+                        <div class="relative" style="height: 280px;">
+                            <canvas id="countryChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="xl:col-span-2 overflow-x-auto">
+                        <table class="country-table">
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th>Android</th>
+                                    <th>iOS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="font-medium">United States</td>
+                                    <td><span class="rating-dot" style="background:var(--android)"></span>2.7</td>
+                                    <td><span class="rating-dot" style="background:var(--gold)"></span>5.0</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-medium">United Kingdom</td>
+                                    <td><span class="rating-dot" style="background:var(--android)"></span>2.6</td>
+                                    <td><span class="rating-dot" style="background:var(--gold)"></span>3.0</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-medium">Germany</td>
+                                    <td><span class="rating-dot" style="background:var(--android)"></span>3.9</td>
+                                    <td><span class="rating-dot" style="background:var(--gold)"></span>4.4<span class="estimated-tag"><i class="fas fa-info-circle"></i>est.</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-medium">Australia</td>
+                                    <td><span class="rating-dot" style="background:var(--android)"></span>4.0</td>
+                                    <td><span class="rating-dot" style="background:var(--gold)"></span>4.6<span class="estimated-tag"><i class="fas fa-info-circle"></i>est.</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-medium">Canada</td>
+                                    <td><span class="rating-dot" style="background:var(--android)"></span>4.0</td>
+                                    <td><span class="rating-dot" style="background:var(--gold)"></span>5.0<span class="estimated-tag"><i class="fas fa-info-circle"></i>est.</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-medium">India</td>
+                                    <td><span class="rating-dot" style="background:var(--android)"></span>4.6</td>
+                                    <td><span class="rating-dot" style="background:var(--gold)"></span>5.0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="text-[10px] text-[var(--muted)] mt-3 italic">
+                            <i class="fas fa-info-circle mr-1 opacity-50"></i>iOS ratings marked "est." are general estimates aligned to the 4.5 overall average. Actuals pending data restoration post-reset.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- IMPROVEMENT SECTION -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div class="dash-card p-5 sm:p-6 fade-in delay-8">
+                    <div class="flex items-center gap-2 mb-5">
+                        <i class="fas fa-shield-halved text-[var(--tp-green)]"></i>
+                        <h2 class="text-base font-semibold text-white">Trustpilot Recovery</h2>
+                    </div>
+                    <div class="flex items-center gap-6 sm:gap-8">
+                        <div class="flex-shrink-0 relative" style="width:160px;height:90px;">
+                            <svg viewBox="0 0 160 90" width="160" height="90">
+                                <path class="gauge-track" d="M 15 80 A 65 65 0 0 1 145 80" />
+                                <path class="gauge-fill" id="tp-gauge" d="M 15 80 A 65 65 0 0 1 145 80"
+                                      stroke="url(#tpGrad)" stroke-dasharray="204.2" stroke-dashoffset="204.2" />
+                                <defs>
+                                    <linearGradient id="tpGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#EF4444" />
+                                        <stop offset="50%" stop-color="#EAB308" />
+                                        <stop offset="100%" stop-color="#00B67A" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
+                                <span class="text-2xl font-extrabold text-white">3.1</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-[var(--muted)]">6 months ago</span>
+                                    <span class="text-sm font-semibold text-[var(--star2)]">1.5</span>
+                                </div>
+                                <div class="star-bar-track mt-1"><div class="star-bar-fill" data-width="30" style="background:var(--star2);width:30%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-[var(--muted)]">Current</span>
+                                    <span class="text-sm font-semibold text-[var(--tp-green)]">3.1</span>
+                                </div>
+                                <div class="star-bar-track mt-1"><div class="star-bar-fill" data-width="62" style="background:var(--tp-green);width:62%"></div></div>
+                            </div>
+                            <div class="flex items-center gap-2 pt-1">
+                                <span class="badge-pulse inline-flex items-center gap-1 text-xs font-bold text-[var(--tp-green)] bg-[rgba(0,182,122,0.12)] px-2.5 py-1 rounded-full">
+                                    <i class="fas fa-arrow-trend-up text-[10px]"></i> +107%
+                                </span>
+                                <span class="text-[11px] text-[var(--muted)]">+1.6 pts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dash-card p-5 sm:p-6 fade-in delay-8">
+                    <div class="flex items-center gap-2 mb-5">
+                        <i class="fab fa-google text-[var(--google-red)]"></i>
+                        <h2 class="text-base font-semibold text-white">Google Ratings Growth</h2>
+                    </div>
+                    <div class="flex items-center gap-6 sm:gap-8">
+                        <div class="flex-shrink-0 relative" style="width:160px;height:90px;">
+                            <svg viewBox="0 0 160 90" width="160" height="90">
+                                <path class="gauge-track" d="M 15 80 A 65 65 0 0 1 145 80" />
+                                <path class="gauge-fill" id="google-gauge" d="M 15 80 A 65 65 0 0 1 145 80"
+                                      stroke="url(#googleGrad)" stroke-dasharray="204.2" stroke-dashoffset="204.2" />
+                                <defs>
+                                    <linearGradient id="googleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#EAB308" />
+                                        <stop offset="100%" stop-color="#EA4335" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
+                                <span class="text-2xl font-extrabold text-white">4.3</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-[var(--muted)]">7–8 months ago</span>
+                                    <span class="text-sm font-semibold text-[var(--star3)]">3.8</span>
+                                </div>
+                                <div class="star-bar-track mt-1"><div class="star-bar-fill" data-width="76" style="background:var(--star3);width:76%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-[var(--muted)]">Current</span>
+                                    <span class="text-sm font-semibold text-[var(--google-red)]">4.3</span>
+                                </div>
+                                <div class="star-bar-track mt-1"><div class="star-bar-fill" data-width="86" style="background:var(--google-red);width:86%"></div></div>
+                            </div>
+                            <div class="flex items-center gap-2 pt-1">
+                                <span class="badge-pulse inline-flex items-center gap-1 text-xs font-bold text-[var(--google-red)] bg-[rgba(234,67,53,0.12)] px-2.5 py-1 rounded-full">
+                                    <i class="fas fa-arrow-trend-up text-[10px]"></i> +13%
+                                </span>
+                                <span class="text-[11px] text-[var(--muted)]">+0.5 pts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="border-t border-[#2A2A2A] mt-auto">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <span class="text-[11px] text-[var(--muted)]">
+                    <i class="fas fa-lock text-[9px] mr-1 opacity-50"></i>Internal Use Only — MUSE Wearables
+                </span>
+                <span class="text-[11px] text-[var(--muted)]">
+                    Generated on 30 March 2026
+                </span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ===== COUNTER ANIMATION =====
+        function animateCounters() {
+            document.querySelectorAll('.counter').forEach(el => {
+                const target = parseFloat(el.dataset.target);
+                const decimals = parseInt(el.dataset.decimals) || 0;
+                const duration = 1200;
+                const start = performance.now();
+                function tick(now) {
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const ease = 1 - Math.pow(1 - progress, 3);
+                    el.textContent = (target * ease).toFixed(decimals);
+                    if (progress < 1) requestAnimationFrame(tick);
+                }
+                requestAnimationFrame(tick);
+            });
+        }
+
+        // ===== STAR BAR ANIMATION =====
+        function animateStarBars() {
+            document.querySelectorAll('.star-bar-fill[data-width]').forEach(bar => {
+                setTimeout(() => { bar.style.width = bar.dataset.width + '%'; }, 300);
+            });
+        }
+
+        // ===== SVG GAUGE ANIMATION =====
+        function animateGauges() {
+            const totalLen = 204.2;
+            const tpGauge = document.getElementById('tp-gauge');
+            if (tpGauge) {
+                setTimeout(() => { tpGauge.style.strokeDashoffset = totalLen - (totalLen * 3.1 / 5); }, 500);
+            }
+            const googleGauge = document.getElementById('google-gauge');
+            if (googleGauge) {
+                setTimeout(() => { googleGauge.style.strokeDashoffset = totalLen - (totalLen * 4.3 / 5); }, 500);
+            }
+        }
+
+        // ===== COUNTRY CHART =====
+        function initCountryChart() {
+            const ctx = document.getElementById('countryChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['United States', 'United Kingdom', 'Germany', 'Australia', 'Canada', 'India'],
+                    datasets: [
+                        {
+                            label: 'Android',
+                            data: [2.7, 2.57, 3.86, 4.0, 4.0, 4.6],
+                            backgroundColor: 'rgba(61, 220, 132, 0.75)',
+                            borderColor: 'rgba(61, 220, 132, 1)',
+                            borderWidth: 1, borderRadius: 4,
+                            barPercentage: 0.7, categoryPercentage: 0.6,
+                        },
+                        {
+                            label: 'iOS',
+                            data: [5.0, 3.0, 4.4, 4.6, 5.0, 5.0],
+                            backgroundColor: 'rgba(212, 168, 83, 0.75)',
+                            borderColor: 'rgba(212, 168, 83, 1)',
+                            borderWidth: 1, borderRadius: 4,
+                            barPercentage: 0.7, categoryPercentage: 0.6,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top', align: 'end',
+                            labels: {
+                                color: '#7A7A7A',
+                                font: { family: 'Outfit', size: 11, weight: '500' },
+                                boxWidth: 12, boxHeight: 12, borderRadius: 3,
+                                useBorderRadius: true, padding: 16,
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#222',
+                            titleColor: '#F0F0F0', bodyColor: '#ccc',
+                            borderColor: '#3a3a3a', borderWidth: 1,
+                            cornerRadius: 8, padding: 10,
+                            titleFont: { family: 'Outfit', weight: '600' },
+                            bodyFont: { family: 'Outfit' },
+                            callbacks: {
+                                label: function(ctx) {
+                                    if (ctx.raw === null) return ctx.dataset.label + ': N/A';
+                                    return ctx.dataset.label + ': ' + ctx.raw.toFixed(1);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 0, max: 5.5,
+                            ticks: {
+                                stepSize: 1, color: '#555',
+                                font: { family: 'Outfit', size: 11 },
+                                callback: v => v <= 5 ? v + ' ★' : ''
+                            },
+                            grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+                            border: { display: false }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#7A7A7A',
+                                font: { family: 'Outfit', size: 11 },
+                                maxRotation: 45, minRotation: 0,
+                            },
+                            grid: { display: false },
+                            border: { display: false }
+                        }
+                    },
+                    animation: { duration: 1400, easing: 'easeOutQuart' }
+                }
+            });
+        }
+
+        // ===== INIT =====
+        document.addEventListener('DOMContentLoaded', () => {
+            animateCounters();
+            animateStarBars();
+            animateGauges();
+            initCountryChart();
+        });
+    </script>
+</body>
+</html>
